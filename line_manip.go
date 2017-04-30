@@ -45,18 +45,24 @@ func Load(filename string) map[int]Line {
 	return trees
 }
 
-func Make_Line_Geometry(line Line, pos []int32, levelOfDetail float64) ([]uint32, []int32) {
+func Make_Line_Geometry(line Line, pos []int32, levelOfDetail float64, sizevalue float64) ([]uint32, []int32) {
 	coord := line.coords
 
 	tileid := Get_XY(line.LAT, line.LONG, levelOfDetail)
 
 	bound := TileXYToBounds(tileid)
 
-	coords := Make_Coords(coord, bound)
+	coords := Make_Coords(coord, bound, sizevalue)
 
-	geometry, pos := Make_Line(coords, pos)
+	if len(coords) == 0 {
+		geometry := []uint32{}
+		return geometry, pos
+	} else {
+		geometry, pos := Make_Line(coords, pos)
+		return geometry, pos
+	}
 
-	return geometry, pos
+	//return geometry, pos
 }
 
 func Make_Sweep(data map[int]Line, sizes []int) (map[int]Line, map[TileID][]int) {
@@ -125,31 +131,42 @@ func createTileWithLine(xyz TileID, total []uint32) ([]byte, error) {
 	return proto.Marshal(tile)
 }
 
-func Make_Size_Sweep(sweepmap map[TileID][]int, data map[int]Line, size int) {
+func create_sizes(line Line, sizes []int) map[int]float64 {
+	var lineid TileID
+	var mybounds Bounds
+	sizemap := map[int]float64{}
+	for _, size := range sizes {
+		lineid = Get_XY(line.LAT, line.LONG, float64(size))
+		mybounds = TileXYToBounds(lineid)
+		sizemap[size] = (mybounds.e - mybounds.w) / 4096
+	}
+	return sizemap
+}
+
+func Make_Size_Sweep(sweepmap map[TileID][]int, data map[int]Line, sizemap map[int]float64) {
 	c := make(chan string)
 
 	for k, v := range sweepmap {
-		if k.z == size {
-			go func(k TileID, v []int, data map[int]Line, c chan<- string) {
-				zval := strconv.Itoa(int(k.z))
-				xval := strconv.Itoa(int(k.x))
-				yval := strconv.Itoa(int(k.y))
-				filename := fmt.Sprintf("tiles/%s/%s/%s", zval, xval, yval)
-				//c := make(chan []uint32)
-				pos := Pos()
-				total := []uint32{}
-				var geometry []uint32
-				for _, val := range v {
-					geometry, pos = Make_Line_Geometry(data[val], pos, float64(k.z))
-					total = append(total, geometry...)
-				}
-				pbfdata, _ := createTileWithLine(k, total)
-				ioutil.WriteFile(filename, []byte(pbfdata), 0644)
-				c <- filename
-			}(k, v, data, c)
+		go func(k TileID, v []int, data map[int]Line, c chan<- string) {
+			zval := strconv.Itoa(int(k.z))
+			xval := strconv.Itoa(int(k.x))
+			yval := strconv.Itoa(int(k.y))
+			filename := fmt.Sprintf("tiles/%s/%s/%s", zval, xval, yval)
+			//c := make(chan []uint32)
+			pos := Pos()
+			total := []uint32{}
+			var geometry []uint32
+			for _, val := range v {
+				geometry, pos = Make_Line_Geometry(data[val], pos, float64(k.z), sizemap[int(k.z)])
+				total = append(total, geometry...)
+			}
+			pbfdata, _ := createTileWithLine(k, total)
+			ioutil.WriteFile(filename, []byte(pbfdata), 0644)
+			c <- filename
+		}(k, v, data, c)
 
-		}
 	}
+
 	counter := 0
 	for counter < len(sweepmap) {
 		select {
@@ -162,11 +179,17 @@ func Make_Size_Sweep(sweepmap map[TileID][]int, data map[int]Line, size int) {
 }
 
 func Make_Line_Tiles(data map[int]Line, sizes []int) {
+	// Making initial sweep
 	data, sweepmap := Make_Sweep(data, sizes)
+
+	// making sizemap
+	sizemap := create_sizes(data[1], sizes)
+	fmt.Print(sizemap)
+
+	// Creating Folders and shit
 	Creating_Folder(sweepmap)
-	Make_Size_Sweep(sweepmap, data)
-	for _, row := range sizes {
-		Make_Size_Sweep(sweepmap, row)
-	}
+
+	// Creating all the files
+	Make_Size_Sweep(sweepmap, data, sizemap)
 
 }
