@@ -47,12 +47,28 @@ func single_point(row []float64, bound Bounds) []int32 {
 	return []int32{xval, yval}
 }
 
+func check_first_last(first []float64, last []float64, bound Bounds) bool {
+	firstc := single_point(first, bound)
+	lastc := single_point(last, bound)
+	if (math.Abs(float64(firstc[0])-float64(lastc[0])) < 10) && (math.Abs(float64(firstc[1])-float64(lastc[1])) < 10) {
+		return true
+	} else {
+		return false
+	}
+}
+
 func Make_Coords(coord string, bound Bounds, sizevalue float64) [][]int32 {
 	coords := Get_coords_json2(coord)
 	var newlist [][]int32
 	var pt, oldpt Point
 	count := 0
 	//var oldi []float64
+
+	if check_first_last(coords[0], coords[len(coords)-1], bound) == true {
+		var newslice [][]int32
+		return newslice
+	}
+
 	oldpt = Point{coords[0][0], coords[0][1]}
 	for _, i := range coords {
 		pt = Point{i[0], i[1]}
@@ -60,7 +76,7 @@ func Make_Coords(coord string, bound Bounds, sizevalue float64) [][]int32 {
 			newlist = append(newlist, single_point(i, bound))
 			count = 1
 		} else {
-			if (Distance(oldpt, pt) > sizevalue) || (len(coords)-1 == count) {
+			if (Distance(oldpt, pt)*2.5 > sizevalue) || (len(coords)-1 == count) {
 				newlist = append(newlist, single_point(i, bound))
 				oldpt = pt
 			}

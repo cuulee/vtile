@@ -4,6 +4,9 @@ import (
 	"math"
 )
 
+// modified from github.com/tidwall/tile38 projection functions
+// adusted to meet my structs and shit
+
 const (
 	// EarthRadius is the radius of the earth
 	EarthRadius = 6378137.0
